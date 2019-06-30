@@ -20,9 +20,11 @@ const (
 
 	// Timestamp is a uint32
 	timestampLengthInBytes = 4
+	timestampStartIndex    = 16
 
 	// Payload is 16-bytes
 	payloadLengthInBytes = 16
+	payloadStartIndex    = 0
 
 	// KSUIDs are 20 bytes when binary encoded
 	byteLength = timestampLengthInBytes + payloadLengthInBytes
@@ -37,9 +39,14 @@ const (
 	maxStringEncoded = "aWgEPTl1tmebfsQzFP4bxwgy80V"
 )
 
+var (
+	timestampEndIndex = timestampStartIndex + timestampLengthInBytes
+	payloadEndIndex   = payloadStartIndex + payloadLengthInBytes
+)
+
 // KSUIDs are 20 bytes:
-//  00-03 byte: uint32 BE UTC timestamp with custom epoch
-//  04-19 byte: random "payload"
+//  00-15 byte: random "payload"
+//  16-19 byte: uint32 BE UTC timestamp with custom epoch
 type KSUID [byteLength]byte
 
 var (
@@ -72,12 +79,12 @@ func (i KSUID) Time() time.Time {
 // The timestamp portion of the ID as a bare integer which is uncorrected
 // for KSUID's special epoch.
 func (i KSUID) Timestamp() uint32 {
-	return binary.BigEndian.Uint32(i[:timestampLengthInBytes])
+	return binary.BigEndian.Uint32(i[timestampStartIndex:timestampEndIndex])
 }
 
 // The 16-byte random payload without the timestamp
 func (i KSUID) Payload() []byte {
-	return i[timestampLengthInBytes:]
+	return i[payloadStartIndex:payloadEndIndex]
 }
 
 // String-encoded representation that can be passed through Parse()
@@ -221,7 +228,7 @@ func NewRandomWithTime(t time.Time) (ksuid KSUID, err error) {
 	randMutex.Lock()
 
 	_, err = io.ReadAtLeast(rander, randBuffer[:], len(randBuffer))
-	copy(ksuid[timestampLengthInBytes:], randBuffer[:])
+	copy(ksuid[payloadStartIndex:payloadEndIndex], randBuffer[:])
 
 	randMutex.Unlock()
 
@@ -231,7 +238,7 @@ func NewRandomWithTime(t time.Time) (ksuid KSUID, err error) {
 	}
 
 	ts := timeToCorrectedUTCTimestamp(t)
-	binary.BigEndian.PutUint32(ksuid[:timestampLengthInBytes], ts)
+	binary.BigEndian.PutUint32(ksuid[timestampStartIndex:timestampEndIndex], ts)
 	return
 }
 
@@ -244,9 +251,9 @@ func FromParts(t time.Time, payload []byte) (KSUID, error) {
 	var ksuid KSUID
 
 	ts := timeToCorrectedUTCTimestamp(t)
-	binary.BigEndian.PutUint32(ksuid[:timestampLengthInBytes], ts)
+	binary.BigEndian.PutUint32(ksuid[timestampStartIndex:timestampEndIndex], ts)
 
-	copy(ksuid[timestampLengthInBytes:], payload)
+	copy(ksuid[payloadStartIndex:payloadEndIndex], payload)
 
 	return ksuid, nil
 }
